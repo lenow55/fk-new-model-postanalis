@@ -1,72 +1,77 @@
 from argparse import ArgumentParser
+from datetime import datetime
+
+from mlflow import MlflowClient
 
 
 def gen_parser():
-    parser: ArgumentParser = ArgumentParser(prog="subsystem_map.py")
+    parser: ArgumentParser = ArgumentParser(prog="main.py")
     _ = parser.add_argument(
         "-n",
-        "--new-report",
+        "--subsystems",
         type=str,
         required=True,
         default="./input",
-        help="путь до файла с метриками по модели",
+        help="путь до файла с списком подсистем на анализ",
     )
     _ = parser.add_argument(
-        "-p",
-        "--models",
+        "-u",
+        "--tracking-uri",
         type=str,
         required=True,
-        default="./models",
-        help="путь до папки с моделями по подсистемам",
-    )
-    _ = parser.add_argument(
-        "-d",
-        "--model_id",
-        type=int,
-        required=True,
-        help="id модели для обработки",
-    )
-    _ = parser.add_argument(
-        "-s",
-        "--start",
-        type=str,
-        required=True,
-        help="Время, с которого инференс",
+        help="адрес сервера mlflow",
     )
     _ = parser.add_argument(
         "-e",
-        "--end",
-        type=str,
+        "--experiment-id",
+        type=int,
         required=True,
-        help="Время, до которого будет идти инференс",
-    )
-    _ = parser.add_argument(
-        "-n",
-        "--name",
-        type=str,
-        required=False,
-        default="inference",
-        help="название рана на mlflow",
-    )
-    _ = parser.add_argument(
-        "--err_th",
-        type=int,
-        required=False,
-        default=35,
-        help="трэшхолд для ошибок",
-    )
-    _ = parser.add_argument(
-        "--req_th",
-        type=int,
-        required=False,
-        default=40,
-        help="трэшхолд для запросов",
-    )
-    _ = parser.add_argument(
-        "--err2req_th",
-        type=int,
-        required=False,
-        default=40,
-        help="трэшхолд для ошибок на запросов",
+        help="id эксперимента для анализа",
     )
     return parser
+
+
+def get_subsystem_metrics(client: MlflowClient, experiment_id: str, name: str):
+    filter_string = f'attributes.run_name = "{name}" AND attributes.status = "FINISHED"'
+    runs = client.search_runs(
+        experiment_ids=[experiment_id],
+        filter_string=filter_string,
+        order_by=["tags.version DESC"],
+    )
+
+    runs2mae: dict[str, float] = {}
+    runs2mse: dict[str, float] = {}
+
+    for run in runs[:-2]:
+        time_start = run.data.params.get("inference_date_time_start")
+        time_end = run.data.params.get("inference_date_time_end")
+        train_95_percentile = run.data.params.get("train_95_percentile")
+        inference_mse = run.data.params.get("inference_mse")
+        inference_mae = run.data.params.get("inference_mae")
+
+        if (
+            not isinstance(time_start, str)
+            or not isinstance(time_end, str)
+            or not isinstance(train_95_percentile, str)
+            or not isinstance(inference_mse, str)
+            or not isinstance(inference_mae, str)
+        ):
+            continue
+
+        try:
+            time_start = datetime.fromisoformat(time_start)
+            time_end = datetime.fromisoformat(time_end)
+            train_95_percentile = float(train_95_percentile)
+            inference_mae = float(inference_mae)
+            inference_mse = float(inference_mse)
+        except Exception as e:
+            print(f"{run.info.run_name}\n{e}")
+            continue
+
+        date_res = (
+            f"{time_start.month}.{time_start.day}-{time_end.month}.{time_end.day}"
+        )
+        runs2mae.update({date_res: inference_mae})
+        runs2mse.update({date_res: inference_mse})
+
+    return runs2mae, runs2mse
