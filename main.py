@@ -1,5 +1,6 @@
 from argparse import Namespace
 import json
+import pandas as pd
 
 from mlflow import MlflowClient
 
@@ -22,10 +23,27 @@ def main(args: Namespace):
 
     client = MlflowClient(tracking_uri=args.tracking_uri)
 
+    mae_index: list[str] = []
+    mse_index: list[str] = []
+    mae_datas: dict[str, list[float]] = {}
+    mse_datas: dict[str, list[float]] = {}
+
     for subsystem in file_list:
-        result = get_subsystem_metrics(
+        mae_result, mse_result = get_subsystem_metrics(
             client=client, experiment_id=args.experiment_id, name=subsystem
         )
+        mae_index = list(mae_result.keys())
+        mae_datas.update({subsystem: list(mae_result.values())})
+        mse_index = list(mse_result.keys())
+        mse_datas.update({subsystem: list(mse_result.values())})
+
+    mae_pd = pd.DataFrame(data=mae_datas, index=pd.Index(mae_index))
+    mse_pd = pd.DataFrame(data=mse_datas, index=pd.Index(mse_index))
+
+    # Запись на разные листы Excel
+    with pd.ExcelWriter(f"./{args.experiment_id}.xlsx", engine="openpyxl") as writer:
+        mae_pd.to_excel(writer, sheet_name="MAE", index=True)
+        mse_pd.to_excel(writer, sheet_name="MSE", index=True)
 
 
 if __name__ == "__main__":
