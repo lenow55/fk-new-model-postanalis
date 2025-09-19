@@ -24,7 +24,7 @@ def gen_parser():
     _ = parser.add_argument(
         "-e",
         "--experiment-id",
-        type=int,
+        type=str,
         required=True,
         help="id эксперимента для анализа",
     )
@@ -46,27 +46,30 @@ def get_subsystem_metrics(client: MlflowClient, experiment_id: str, name: str):
         time_start = run.data.params.get("inference_date_time_start")
         time_end = run.data.params.get("inference_date_time_end")
         train_95_percentile = run.data.params.get("train_95_percentile")
-        inference_mse = run.data.params.get("inference_mse")
-        inference_mae = run.data.params.get("inference_mae")
+        inference_mse = run.data.metrics.get("inference_mse")
+        inference_mae = run.data.metrics.get("inference_mae")
 
         if (
             not isinstance(time_start, str)
             or not isinstance(time_end, str)
             or not isinstance(train_95_percentile, str)
-            or not isinstance(inference_mse, str)
-            or not isinstance(inference_mae, str)
         ):
             continue
 
         try:
             time_start = datetime.fromisoformat(time_start)
             time_end = datetime.fromisoformat(time_end)
-            train_95_percentile = float(train_95_percentile)
-            inference_mae = float(inference_mae)
-            inference_mse = float(inference_mse)
         except Exception as e:
-            print(f"{run.info.run_name}\n{e}")
+            print(f"{run.info.run_id}\n{e}")
             continue
+        if not isinstance(inference_mae, float) or not isinstance(inference_mse, float):
+            if train_95_percentile == "0.0":
+                inference_mae = float(0.0)
+                inference_mse = float(0.0)
+            else:
+                raise RuntimeError(
+                    f"Bad metrics exp: {experiment_id}, run {run.info.run_id}"
+                )
 
         date_res = (
             f"{time_start.month}.{time_start.day}-{time_end.month}.{time_end.day}"
