@@ -74,7 +74,7 @@ def get_subsystem_metrics(client: MlflowClient, experiment_id: str, name: str):
         date_res = (
             f"{time_start.month}.{time_start.day}-{time_end.month}.{time_end.day}"
         )
-        runs2mae.update({date_res: inference_mae})
-        runs2mse.update({date_res: inference_mse})
+        runs2mae.update({date_res: round(inference_mae, 4)})
+        runs2mse.update({date_res: round(inference_mse, 4)})
 
     return runs2mae, runs2mse
