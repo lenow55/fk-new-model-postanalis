@@ -59,11 +59,12 @@ def get_subsystem_metrics(client: MlflowClient, experiment_id: str, name: str):
         try:
             time_start = datetime.fromisoformat(time_start)
             time_end = datetime.fromisoformat(time_end)
+            train_95_percentile = float(train_95_percentile)
         except Exception as e:
             print(f"{run.info.run_id}\n{e}")
             continue
         if not isinstance(inference_mae, float) or not isinstance(inference_mse, float):
-            if train_95_percentile == "0.0":
+            if train_95_percentile < 0.0001:
                 inference_mae = float(0.0)
                 inference_mse = float(0.0)
             else:
